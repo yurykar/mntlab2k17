@@ -13,6 +13,39 @@ Vagrant.configure("2") do |config|
   # Every Vagrant development environment requires a box. You can search for
   # boxes at https://vagrantcloud.com/search.
     
+   config.vm.define "web" do |web| 
+   web.vm.box = "sbeliakou/centos-7.4-x86_64-minimal"
+   web.vm.hostname = "web"
+   web.vm.network "private_network", ip: "172.16.1.70"
+   web.ssh.insert_key = false
+   web.vm.provider 'virtualbox' do |vb|
+        vb.memory="1024"  
+	vb.name = "web"
+   end
+   web.vm.provision 'shell', inline: <<-EOF
+      yum install -y epel-release wget
+      yum install -y net-tools	
+      yum install -y nginx
+      cp -f /vagrant/lb.conf /etc/nginx/conf.d/lb.conf
+      systemctl start nginx.service
+      systemctl enable nginx.service
+      yum install -y avahi avahi-tools
+      systemctl start avahi-daemon
+      systemctl enable avahi-daemon
+      wget "https://releases.hashicorp.com/serf/0.8.1/serf_0.8.1_linux_amd64.zip"
+      sudo yum install -y unzip
+      unzip serf_0.8.1_linux_amd64.zip 
+      sudo mv serf /usr/bin/serf
+      sudo serf agent -node=web -bind=172.16.1.70 &>/dev/null &disown
+      #cp -f /vagrant/serf.service /etc/systemd/system/serf.service
+      #chown vagrant:vagrant /etc/systemd/system/serf.service
+      #chmod 777 /etc/systemd/system/serf.service
+      #systemctl daemon-reload
+      #systemctl enable serf.service
+      #systemctl start serf.service
+  EOF
+  end
+
   (1..2).each do |i|
     config.vm.define "node-#{i}" do |node|
        node.vm.box = "sbeliakou/centos-7.4-x86_64-minimal"
@@ -36,47 +69,19 @@ Vagrant.configure("2") do |config|
         sudo yum install -y unzip
         unzip serf_0.8.1_linux_amd64.zip 
         sudo mv serf /usr/bin/serf
-        cp -f /vagrant/serf.service /etc/systemd/system/serf.service
-        chown vagrant:vagrant /etc/systemd/system/serf.service
-        chmod 777 /etc/systemd/system/serf.service
-        systemctl daemon-reload
-        systemctl enable serf.service
-        systemctl start serf.service
+        sudo serf agent -node="node-#{i}" -bind="172.16.1.#{i+20}" &>/dev/null &disown
+        sudo serf join 172.16.1.70
+        #cp -f /vagrant/serf.service /etc/systemd/system/serf.service
+        #chown vagrant:vagrant /etc/systemd/system/serf.service
+        #chmod 777 /etc/systemd/system/serf.service
+        #systemctl daemon-reload
+        #systemctl enable serf.service
+        #systemctl start serf.service
        EOF
     end
   end
 
- config.vm.define "web" do |web| 
-   web.vm.box = "sbeliakou/centos-7.4-x86_64-minimal"
-   web.vm.hostname = "web"
-   web.vm.network "private_network", ip: "172.16.1.70"
-   web.ssh.insert_key = false
-   web.vm.provider 'virtualbox' do |vb|
-        vb.memory="1024"  
-	vb.name = "web"
-   end
-   web.vm.provision 'shell', inline: <<-EOF
-      yum install -y epel-release wget
-      yum install -y net-tools	
-      yum install -y nginx
-      cp -f /vagrant/lb.conf /etc/nginx/conf.d/lb.conf
-      systemctl start nginx.service
-      systemctl enable nginx.service
-      yum install -y avahi avahi-tools
-      systemctl start avahi-daemon
-      systemctl enable avahi-daemon
-      wget "https://releases.hashicorp.com/serf/0.8.1/serf_0.8.1_linux_amd64.zip"
-      sudo yum install -y unzip
-      unzip serf_0.8.1_linux_amd64.zip 
-      sudo mv serf /usr/bin/serf
-      cp -f /vagrant/serf.service /etc/systemd/system/serf.service
-      chown vagrant:vagrant /etc/systemd/system/serf.service
-      chmod 777 /etc/systemd/system/serf.service
-      systemctl daemon-reload
-      systemctl enable serf.service
-      systemctl start serf.service
-  EOF
-  end
+
 
   
 end
